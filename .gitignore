@@ -13,7 +13,7 @@ build
 
 # models
 checkpoints/
-/checkpoints/deepsc-AWGN/*
-/checkpoints/deepsc-mi-awgn/*
-/checkpoints/deepsc-mi/Rayleigh/*
-/checkpoints/deepsc-Rayleigh/* 
+
+# data
+europarl/
+europarl.tgz

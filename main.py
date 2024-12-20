@@ -12,29 +12,31 @@ import torch
 import random
 import torch.nn as nn
 import numpy as np
-from utils import SNR_to_noise, initNetParams, train_step, val_step, train_mi
+from utils import SNR_to_noise, initNetParams, train_step, val_step, train_mi, plot_training_history
 from dataset import EurDataset, collate_data
 from models.transceiver import DeepSC
 from models.mutual_info import Mine
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from datetime import datetime, timedelta, timezone
+import pytz
 
 parser = argparse.ArgumentParser()
 #parser.add_argument('--data-dir', default='data/train_data.pkl', type=str)
-parser.add_argument('--vocab-file', default='europarl/vocab.json', type=str)
-parser.add_argument('--checkpoint-path', default='checkpoints/deepsc-Rayleigh', type=str)
-parser.add_argument('--channel', default='Rayleigh', type=str, help = 'Please choose AWGN, Rayleigh, and Rician')
+parser.add_argument('--vocab-file', default='data/vocab.json', type=str)
+parser.add_argument('--checkpoint-path', default='checkpoints/', type=str)
+parser.add_argument('--channel', default='Rayleigh', type=str, help='Please choose AWGN, Rayleigh, and Rician')
 parser.add_argument('--MAX-LENGTH', default=30, type=int)
 parser.add_argument('--MIN-LENGTH', default=4, type=int)
-parser.add_argument('--d-model', default=128, type=int)
+parser.add_argument('--d-model', default=128, type=int) 
 parser.add_argument('--dff', default=512, type=int)
 parser.add_argument('--num-layers', default=4, type=int)
 parser.add_argument('--num-heads', default=8, type=int)
 parser.add_argument('--batch-size', default=128, type=int)
 parser.add_argument('--epochs', default=80, type=int)
+parser.add_argument('--lamb', default=0.0009, type=float, help='weight for MI loss')
 
-
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu") 
 
 def setup_seed(seed):
     torch.manual_seed(seed)
@@ -72,34 +74,66 @@ def train(epoch, args, net, mi_net=None):
                                 pin_memory=True, collate_fn=collate_data)
     pbar = tqdm(train_iterator)
 
+    # for loss history
+    total_loss = 0
+    total_mi = 0 if mi_net is not None else None
+    batch_count = 0
+
     noise_std = np.random.uniform(SNR_to_noise(5), SNR_to_noise(10), size=(1))
 
     for sents in pbar:
         sents = sents.to(device)
+        batch_count += 1
 
         if mi_net is not None:
             mi = train_mi(net, mi_net, sents, 0.1, pad_idx, mi_opt, args.channel)
             loss = train_step(net, sents, sents, 0.1, pad_idx,
-                              optimizer, criterion, args.channel, mi_net)
+                              optimizer, criterion, args.channel, args.lamb, mi_net) # loss = E2E loss + mi
+            
+            # for loss history 
+            total_loss += loss
+            total_mi += mi
+
             pbar.set_description(
                 'Epoch: {};  Type: Train; Loss: {:.5f}; MI {:.5f}'.format(
-                    epoch + 1, loss, mi
+                    epoch + 1, loss, -mi
                 )
             )
         else:
             loss = train_step(net, sents, sents, noise_std[0], pad_idx,
                               optimizer, criterion, args.channel)
+            
+            # for loss history
+            total_loss += loss
+
             pbar.set_description(
                 'Epoch: {};  Type: Train; Loss: {:.5f}'.format(
                     epoch + 1, loss
                 )
             )
+    
+    if mi_net is not None:
+        return total_loss / batch_count, total_mi / batch_count
+
+    return total_loss / batch_count
 
 
 if __name__ == '__main__':
-    # setup_seed(10)
+    setup_seed(10)
     args = parser.parse_args()
-    args.vocab_file = '/import/antennas/Datasets/hx301/' + args.vocab_file
+    tw = pytz.timezone('Asia/Taipei')
+    current_time = datetime.now(tw)
+
+    args.checkpoint_path = args.checkpoint_path + current_time.strftime('%Y%m%d_%H%M') + '-' + args.channel + '-lamb' + str(args.lamb)
+    args.vocab_file = '' + args.vocab_file
+
+    print('\n' + '='*50)
+    print('Training Arguments:')
+    print('-'*50)
+    for arg in vars(args):
+        print(f'{arg}: {getattr(args, arg)}')
+    print('='*50 + '\n')
+
     """ preparing the dataset """
     vocab = json.load(open(args.vocab_file, 'rb'))
     token_to_idx = vocab['token_to_idx']
@@ -120,24 +154,36 @@ if __name__ == '__main__':
     mi_opt = torch.optim.Adam(mi_net.parameters(), lr=1e-3)
     #opt = NoamOpt(args.d_model, 1, 4000, optimizer)
     initNetParams(deepsc)
+
+    train_loss_epochs = []
+    train_mi_epochs = []
+    val_loss_epochs = []
     for epoch in range(args.epochs):
         start = time.time()
-        record_acc = 10
+        best_val_loss = 10
 
-        train(epoch, args, deepsc)
-        avg_acc = validate(epoch, args, deepsc)
+        # val_loss = train(epoch, args, deepsc)
+        avg_loss, avg_mi = train(epoch, args, deepsc, mi_net)
+        val_loss = validate(epoch, args, deepsc)
 
-        if avg_acc < record_acc:
+        # only save current best weight
+        if val_loss < best_val_loss:
             if not os.path.exists(args.checkpoint_path):
                 os.makedirs(args.checkpoint_path)
             with open(args.checkpoint_path + '/checkpoint_{}.pth'.format(str(epoch + 1).zfill(2)), 'wb') as f:
                 torch.save(deepsc.state_dict(), f)
-            record_acc = avg_acc
-    record_loss = []
+            best_val_loss = val_loss
 
-
-    
-
+        train_loss_epochs.append(avg_loss)
+        train_mi_epochs.append(-avg_mi) #############
+        val_loss_epochs.append(val_loss)
+        loss_path = args.checkpoint_path + '/losses/'
+        os.makedirs(loss_path, exist_ok=True)
         
+        np.save(loss_path + 'train_loss_epochs.npy', np.array(train_loss_epochs))
+        np.save(loss_path + 'train_mi_epochs.npy', np.array(train_mi_epochs))
+        np.save(loss_path + 'vali_loss_epochs.npy', np.array(val_loss_epochs))
 
+        plot_training_history(loss_path, args)
 
+    best_val_loss = []

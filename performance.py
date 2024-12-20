@@ -22,9 +22,9 @@ from sklearn.preprocessing import normalize
 from w3lib.html import remove_tags
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--data-dir', default='europarl/train_data.pkl', type=str)
-parser.add_argument('--vocab-file', default='europarl/vocab.json', type=str)
-parser.add_argument('--checkpoint-path', default='checkpoints/deepsc-Rayleigh', type=str)
+parser.add_argument('--data-dir', default='data/train_data.pkl', type=str)
+parser.add_argument('--vocab-file', default='data/vocab.json', type=str)
+parser.add_argument('--checkpoint-path', default='checkpoints/deepsc-mi_net', type=str)
 parser.add_argument('--channel', default='Rayleigh', type=str)
 parser.add_argument('--MAX-LENGTH', default=30, type=int)
 parser.add_argument('--MIN-LENGTH', default=4, type=int)
@@ -37,6 +37,7 @@ parser.add_argument('--epochs', default=2, type = int)
 parser.add_argument('--bert-config-path', default='bert/cased_L-12_H-768_A-12/bert_config.json', type = str)
 parser.add_argument('--bert-checkpoint-path', default='bert/cased_L-12_H-768_A-12/bert_model.ckpt', type = str)
 parser.add_argument('--bert-dict-path', default='bert/cased_L-12_H-768_A-12/vocab.txt', type = str)
+parser.add_argument('--lamb', default=0.0009, type=float, help='weight for MI loss')
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -160,7 +161,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
     SNR = [0,3,6,9,12,15,18]
 
-    args.vocab_file = '/import/antennas/Datasets/hx301/' + args.vocab_file
+    # args.vocab_file = '/import/antennas/Datasets/hx301/' + args.vocab_file
+    args.checkpoint_path = args.checkpoint_path + '-' + args.channel + '-lamb' + str(args.lamb)
+    args.vocab_file = '' + args.vocab_file
     vocab = json.load(open(args.vocab_file, 'rb'))
     token_to_idx = vocab['token_to_idx']
     idx_to_token = dict(zip(token_to_idx.values(), token_to_idx.keys()))
@@ -182,7 +185,7 @@ if __name__ == '__main__':
 
     model_paths.sort(key=lambda x: x[1])  # sort the image by the idx
 
-    model_path, _ = model_paths[-1]
+    model_path, _ = model_paths[-1]  # use the last mode
     checkpoint = torch.load(model_path)
     deepsc.load_state_dict(checkpoint)
     print('model load!')

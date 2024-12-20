@@ -14,6 +14,7 @@ import numpy as np
 from w3lib.html import remove_tags
 from nltk.translate.bleu_score import sentence_bleu
 from models.mutual_info import sample_batch, mutual_information
+import matplotlib.pyplot as plt
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -201,7 +202,7 @@ def create_masks(src, trg, padding_idx):
     return src_mask.to(device), combined_mask.to(device)
 
 def loss_function(x, trg, padding_idx, criterion):
-    
+    '''Discard the loss from padding tokens'''
     loss = criterion(x, trg)
     mask = (trg != padding_idx).type_as(loss.data)
     # a = mask.cpu().numpy()
@@ -225,7 +226,7 @@ def SNR_to_noise(snr):
 
     return noise_std
 
-def train_step(model, src, trg, n_var, pad, opt, criterion, channel, mi_net=None):
+def train_step(model, src, trg, n_var, pad, opt, criterion, channel, lamb=None, mi_net=None):
     model.train()
 
     trg_inp = trg[:, :-1]
@@ -264,11 +265,11 @@ def train_step(model, src, trg, n_var, pad, opt, criterion, channel, mi_net=None
                          pad, criterion)
 
     if mi_net is not None:
-        mi_net.eval()
+        mi_net.eval() # important
         joint, marginal = sample_batch(Tx_sig, Rx_sig)
         mi_lb, _, _ = mutual_information(joint, marginal, mi_net)
         loss_mine = -mi_lb
-        loss = loss + 0.0009 * loss_mine
+        loss = loss + lamb * loss_mine
     # loss = loss_function(pred, trg_real, pad)
 
     loss.backward()
@@ -296,7 +297,7 @@ def train_mi(model, mi_net, src, n_var, padding_idx, opt, channel):
         raise ValueError("Please choose from AWGN, Rayleigh, and Rician")
 
     joint, marginal = sample_batch(Tx_sig, Rx_sig)
-    mi_lb, _, _ = mutual_information(joint, marginal, mi_net)
+    mi_lb, _, _ = mutual_information(joint, marginal, mi_net) # why????
     loss_mine = -mi_lb
 
     loss_mine.backward()
@@ -390,5 +391,31 @@ def greedy_decode(model, src, n_var, max_len, padding_idx, start_symbol, channel
 
     return outputs
 
-
-
+def plot_training_history(loss_path, args):
+    train_loss = np.load(loss_path + 'train_loss_epochs.npy')
+    train_mi = np.load(loss_path + 'train_mi_epochs.npy')
+    val_loss = np.load(loss_path + 'vali_loss_epochs.npy')
+    epochs = range(1, len(train_loss) + 1)
+    
+    plt.figure(figsize=(8, 5))
+    plt.plot(epochs, train_loss, 'b-', label='Training Loss')
+    plt.plot(epochs, val_loss, 'r-', label='Validation Loss')
+    plt.title(f'Loss History (λ={args.lamb})', fontsize=20)
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(f'{loss_path}loss_history.png', dpi=300)
+    plt.close()
+    
+    plt.figure(figsize=(8, 5))
+    plt.plot(epochs, train_mi, 'g-', label='Mutual Information')
+    plt.title('Mutual Information History', fontsize=20)
+    plt.xlabel('Epoch')
+    plt.ylabel('MI')
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(f'{loss_path}mi_history.png', dpi=300)
+    plt.close()

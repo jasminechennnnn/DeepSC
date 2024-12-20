@@ -9,7 +9,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.init import  xavier_uniform_
+from torch.nn.init import xavier_uniform_
 
 class Mine(nn.Module):
     def __init__(self, in_dim=2, hidden_size=10):
@@ -67,3 +67,4 @@ def sample_batch(rec, noise):
     joint = torch.cat((rec_sample1, noise_sample1), 1)
     marg = torch.cat((rec_sample1, noise_sample2), 1)
     return joint, marg
+

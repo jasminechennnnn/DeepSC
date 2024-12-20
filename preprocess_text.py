@@ -23,9 +23,9 @@ from tqdm import tqdm
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--input-data-dir', default='europarl/en', type=str)
-parser.add_argument('--output-train-dir', default='europarl/train_data.pkl', type=str)
-parser.add_argument('--output-test-dir', default='europarl/test_data.pkl', type=str)
-parser.add_argument('--output-vocab', default='europarl/vocab.json', type=str)
+parser.add_argument('--output-train-dir', default='data/train_data.pkl', type=str)
+parser.add_argument('--output-test-dir', default='data/test_data.pkl', type=str)
+parser.add_argument('--output-vocab', default='data/vocab.json', type=str)
 
 SPECIAL_TOKENS = {
   '<PAD>': 0,
@@ -100,7 +100,7 @@ def tokenize(s, delim=' ',  add_start_token=True, add_end_token=True,
 
 def build_vocab(sequences, token_to_idx = { }, min_token_count=1, delim=' ',
                 punct_to_keep=None, punct_to_remove=None, ):
-    token_to_count = {}
+    token_to_count = {} # {token: count}
 
     for seq in sequences:
       seq_tokens = tokenize(seq, delim=delim, punct_to_keep=punct_to_keep,
@@ -143,12 +143,13 @@ def decode(seq_idx, idx_to_token, delim=None, stop_at_end=True):
 
 
 def main(args):
-    data_dir = '/import/antennas/Datasets/hx301/'
+    data_dir = ''
     args.input_data_dir = data_dir + args.input_data_dir
     args.output_train_dir = data_dir + args.output_train_dir
     args.output_test_dir = data_dir + args.output_test_dir
     args.output_vocab = data_dir + args.output_vocab
 
+    # Step 1: data cleaning
     print(args.input_data_dir)
     sentences = []
     print('Preprocess Raw Text')
@@ -166,6 +167,7 @@ def main(args):
     sentences = list(a.keys())
     print('Number of sentences: {}'.format(len(sentences)))
     
+    # Step 2: build vocabuary table
     print('Build Vocab')
     token_to_idx = build_vocab(
         sentences, SPECIAL_TOKENS,
@@ -175,11 +177,12 @@ def main(args):
     vocab = {'token_to_idx': token_to_idx}
     print('Number of words in Vocab: {}'.format(len(token_to_idx)))
 
-    # save the vocab
+    # save the vocab table {token: index}
     if args.output_vocab != '':
         with open(args.output_vocab, 'w') as f:
             json.dump(vocab, f)
 
+    # Step 3: Encode data, token -> index
     print('Start encoding txt')
     results = []
     for seq in tqdm(sentences):
@@ -187,7 +190,7 @@ def main(args):
         tokens = [token_to_idx[word] for word in words]
         results.append(tokens)
 
-
+    # Step 4: split data into train/test
     print('Writing Data')
     train_data = results[: round(len(results) * 0.9)]
     test_data = results[round(len(results) * 0.9):]
