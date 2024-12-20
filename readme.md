@@ -2,10 +2,38 @@
 
 <center>Huiqiang Xie, Zhijin Qin, Geoffrey Ye Li, and Biing-Hwang Juang </center>
 
-This is the implementation of  Deep learning enabled semantic communication systems.
+This is the implementation of Deep Learning Enabled Semantic Communication Systems.
 
-## Requirements
-+ See the `requirements.txt` for the required python packages and run `pip install -r requirements.txt` to install them.
+## 0. Environment
+```shell
+conda create -n deepsc python=3.8
+conda activate deepsc
+pip install -r requirements.txt
+```
+
+## 1. Data Preprocessing
+You can skip this step as preprocessed data is already included in the `data/` directory.
+```shell
+mkdir data
+wget http://www.statmt.org/europarl/v7/europarl.tgz
+tar zxvf europarl.tgz
+python preprocess_text.py
+```
+
+## 2. Training
+* Please carefully set the mutual information coefficient $\lambda$ using the `--lamb` parameter
+* The default work directory is `checkpoints/`
+
+```shell
+python train.py 
+```
+
+## 3. Evaluation
+* Note: If you want to compute sentence similarity, please download the BERT model first.
+
+```shell
+python performance.py
+```
 
 ## Bibtex
 ```bitex
@@ -16,25 +44,3 @@ This is the implementation of  Deep learning enabled semantic communication syst
   year={2021},
   volume={Early Access}}
 ```
-## Preprocess
-```shell
-mkdir data
-wget http://www.statmt.org/europarl/v7/europarl.tgz
-tar zxvf europarl.tgz
-python preprocess_text.py
-```
-
-## Train
-```shell
-python main.py 
-```
-### Notes
-+ Please carefully set the $\lambda$ of mutual information part since I have tested the model in different platform, 
-i.e., Tensorflow and Pytorch, same $\lambda$ shows different performance.  
-
-## Evaluation
-```shell
-python performance.py
-```
-### Notes
-+ If you want to compute the sentence similarity, please download the bert model.
