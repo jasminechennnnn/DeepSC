@@ -166,11 +166,14 @@ if __name__ == '__main__':
         avg_loss, avg_mi = train(epoch, args, deepsc, mi_net)
         val_loss = validate(epoch, args, deepsc)
 
+        if not os.path.exists(args.checkpoint_path):
+            os.makedirs(args.checkpoint_path)
+        with open(args.checkpoint_path + '/latest.pth'.format(str(epoch + 1).zfill(2)), 'wb') as f:
+            torch.save(deepsc.state_dict(), f)
+
         # only save current best weight
         if val_loss < best_val_loss:
-            if not os.path.exists(args.checkpoint_path):
-                os.makedirs(args.checkpoint_path)
-            with open(args.checkpoint_path + '/checkpoint_{}.pth'.format(str(epoch + 1).zfill(2)), 'wb') as f:
+            with open(args.checkpoint_path + '/best.pth'.format(str(epoch + 1).zfill(2)), 'wb') as f:
                 torch.save(deepsc.state_dict(), f)
             best_val_loss = val_loss
 

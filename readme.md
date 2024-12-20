@@ -23,17 +23,17 @@ python preprocess_text.py
 ## 2. Training
 * Please carefully set the mutual information coefficient $\lambda$ using the `--lamb` parameter
 * The default work directory is `checkpoints/`
-
 ```shell
 python train.py 
 ```
 
 ## 3. Evaluation
-* Note: If you want to compute sentence similarity, please download the BERT model first.
-
+* Use the `--checkpoint-path` parameter to specify the directory containing the model checkpoints for evaluation.
+e.g.,
 ```shell
-python performance.py
+python performance.py --checkpoint-path=checkpoints/20241220_2335-Rayleigh-lamb0.0009
 ```
+* Note: If you want to compute sentence similarity, please download the BERT model first.
 
 ## Bibtex
 ```bitex

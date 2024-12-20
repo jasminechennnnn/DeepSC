@@ -24,7 +24,7 @@ from w3lib.html import remove_tags
 parser = argparse.ArgumentParser()
 parser.add_argument('--data-dir', default='data/train_data.pkl', type=str)
 parser.add_argument('--vocab-file', default='data/vocab.json', type=str)
-parser.add_argument('--checkpoint-path', default='checkpoints/deepsc-mi_net', type=str)
+parser.add_argument('--checkpoint-path', default='checkpoints/', type=str)
 parser.add_argument('--channel', default='Rayleigh', type=str)
 parser.add_argument('--MAX-LENGTH', default=30, type=int)
 parser.add_argument('--MIN-LENGTH', default=4, type=int)
@@ -161,8 +161,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     SNR = [0,3,6,9,12,15,18]
 
-    # args.vocab_file = '/import/antennas/Datasets/hx301/' + args.vocab_file
-    args.checkpoint_path = args.checkpoint_path + '-' + args.channel + '-lamb' + str(args.lamb)
     args.vocab_file = '' + args.vocab_file
     vocab = json.load(open(args.vocab_file, 'rb'))
     token_to_idx = vocab['token_to_idx']
