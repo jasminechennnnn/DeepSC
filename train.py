@@ -61,7 +61,7 @@ def validate(epoch, args, net):
             total += loss
             pbar.set_description(
                 'Epoch: {}; Type: VAL; Loss: {:.5f}'.format(
-                    epoch + 1, loss
+                    epoch, loss
                 )
             )
 
@@ -96,7 +96,7 @@ def train(epoch, args, net, mi_net=None):
 
             pbar.set_description(
                 'Epoch: {};  Type: Train; Loss: {:.5f}; MI {:.5f}'.format(
-                    epoch + 1, loss, -mi
+                    epoch, loss, -mi
                 )
             )
         else:
@@ -108,7 +108,7 @@ def train(epoch, args, net, mi_net=None):
 
             pbar.set_description(
                 'Epoch: {};  Type: Train; Loss: {:.5f}'.format(
-                    epoch + 1, loss
+                    epoch, loss
                 )
             )
     
@@ -158,9 +158,11 @@ if __name__ == '__main__':
     train_loss_epochs = []
     train_mi_epochs = []
     val_loss_epochs = []
-    for epoch in range(args.epochs):
+    min_epoch = 1
+    start_epoch = 1
+    best_val_loss = 10
+    for epoch in range(start_epoch, args.epochs + 1):
         start = time.time()
-        best_val_loss = 10
 
         # val_loss = train(epoch, args, deepsc)
         avg_loss, avg_mi = train(epoch, args, deepsc, mi_net)
@@ -168,14 +170,17 @@ if __name__ == '__main__':
 
         if not os.path.exists(args.checkpoint_path):
             os.makedirs(args.checkpoint_path)
-        with open(args.checkpoint_path + '/latest.pth'.format(str(epoch + 1).zfill(2)), 'wb') as f:
+        with open(args.checkpoint_path + '/latest.pth'.format(str(epoch).zfill(2)), 'wb') as f:
             torch.save(deepsc.state_dict(), f)
 
         # only save current best weight
         if val_loss < best_val_loss:
-            with open(args.checkpoint_path + '/best.pth'.format(str(epoch + 1).zfill(2)), 'wb') as f:
+            min_epoch = epoch
+            with open(args.checkpoint_path + '/best.pth'.format(str(epoch).zfill(2)), 'wb') as f:
                 torch.save(deepsc.state_dict(), f)
             best_val_loss = val_loss
+        
+        print(f'Current epoch: {epoch}, Best epoch so far: {min_epoch}')
 
         train_loss_epochs.append(avg_loss)
         train_mi_epochs.append(-avg_mi) #############
