@@ -175,16 +175,12 @@ if __name__ == '__main__':
                         num_vocab, num_vocab, args.d_model, args.num_heads,
                         args.dff, 0.1).to(device)
 
-    model_paths = []
-    for fn in os.listdir(args.checkpoint_path):
-        if not fn.endswith('.pth'): continue
-        idx = int(os.path.splitext(fn)[0].split('_')[-1])  # read the idx of image
-        model_paths.append((os.path.join(args.checkpoint_path, fn), idx))
+    model_path = os.path.join(args.checkpoint_path, 'best.pth')
+    if os.path.exists(model_path):
+        checkpoint = torch.load(model_path)
+    else:
+        raise FileNotFoundError(f"Could not find best.pth in {args.checkpoint_path}")
 
-    model_paths.sort(key=lambda x: x[1])  # sort the image by the idx
-
-    model_path, _ = model_paths[-1]  # use the last mode
-    checkpoint = torch.load(model_path)
     deepsc.load_state_dict(checkpoint)
     print('model load!')
 
