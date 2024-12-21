@@ -117,7 +117,6 @@ def train(epoch, args, net, mi_net=None):
 
     return total_loss / batch_count
 
-
 if __name__ == '__main__':
     setup_seed(10)
     args = parser.parse_args()
@@ -126,6 +125,22 @@ if __name__ == '__main__':
 
     args.checkpoint_path = args.checkpoint_path + current_time.strftime('%Y%m%d_%H%M') + '-' + args.channel + '-lamb' + str(args.lamb)
     args.vocab_file = '' + args.vocab_file
+
+    log_dir = os.path.join(args.checkpoint_path, 'log/')
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    log_path = os.path.join(log_dir, 'train.info.log')
+    with open(log_path, 'w', encoding='utf-8') as f:
+        f.write('Training Arguments:\n')
+        f.write('-'*50 + '\n')
+
+        for arg in vars(args):
+            arg_value = getattr(args, arg)
+            f.write(f'{arg}: {arg_value}\n')
+        f.write('='*50 + '\n')
+        
+        f.write(f'Training start time: {current_time.strftime("%Y-%m-%d %H:%M:%S")}\n')
+        f.write('='*50 + '\n\n')
 
     print('\n' + '='*50)
     print('Training Arguments:')

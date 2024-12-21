@@ -175,12 +175,26 @@ if __name__ == '__main__':
                         num_vocab, num_vocab, args.d_model, args.num_heads,
                         args.dff, 0.1).to(device)
 
-    model_path = os.path.join(args.checkpoint_path, 'best.pth')
-    if os.path.exists(model_path):
-        checkpoint = torch.load(model_path)
+    # find the latest checkpoint
+    if args.checkpoint_path == "checkpoints/":
+        subdirs = [d for d in os.listdir(args.checkpoint_path) if os.path.isdir(os.path.join(args.checkpoint_path, d))]
+    
+        if not subdirs:
+            raise FileNotFoundError("No checkpoint directories found in checkpoints/")
+        
+        latest_dir = sorted(subdirs)[-1]
+        model_path = os.path.join(args.checkpoint_path, latest_dir, 'best.pth')
+        
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"No best.pth found in {os.path.join(args.checkpoint_path, latest_dir)}")
+            
     else:
-        raise FileNotFoundError(f"Could not find best.pth in {args.checkpoint_path}")
+        model_path = os.path.join(args.checkpoint_path, 'best.pth')
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"No best.pth found in {args.checkpoint_path}")
 
+    checkpoint = torch.load(model_path)
+    print(f"Loading checkpoint from: {model_path}") 
     deepsc.load_state_dict(checkpoint)
     print('model load!')
 
