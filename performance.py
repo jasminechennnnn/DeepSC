@@ -20,6 +20,8 @@ from sklearn.preprocessing import normalize
 # from bert4keras.models import build_bert_model
 # from bert4keras.tokenizers import Tokenizer
 from w3lib.html import remove_tags
+from datetime import datetime, timedelta, timezone
+import pytz
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data-dir', default='data/train_data.pkl', type=str)
@@ -98,18 +100,24 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 def performance(args, SNR, net):
     # similarity = Similarity(args.bert_config_path, args.bert_checkpoint_path, args.bert_dict_path)
-    bleu_score_1gram = BleuScore(1, 0, 0, 0)
+    bleu_scores = {
+        '1gram': BleuScore(1, 0, 0, 0),
+        '2gram': BleuScore(0, 1, 0, 0),
+        '3gram': BleuScore(0, 0, 1, 0),
+        '4gram': BleuScore(0, 0, 0, 1),
+        'avg': BleuScore(0.25, 0.25, 0.25, 0.25)
+    }
 
     test_eur = EurDataset('test')
     test_iterator = DataLoader(test_eur, batch_size=args.batch_size, num_workers=0,
                                pin_memory=True, collate_fn=collate_data)
 
     StoT = SeqtoText(token_to_idx, end_idx)
-    score = []
-    score2 = []
+    scores = {key: [] for key in bleu_scores.keys()}
+    # score2 = []
     net.eval()
     with torch.no_grad():
-        for epoch in range(args.epochs):
+        for _ in range(args.epochs):
             Tx_word = []
             Rx_word = []
 
@@ -137,25 +145,46 @@ def performance(args, SNR, net):
 
                 Tx_word.append(word)
                 Rx_word.append(target_word)
-
-            bleu_score = []
-            sim_score = []
-            for sent1, sent2 in zip(Tx_word, Rx_word):
-                # 1-gram
-                bleu_score.append(bleu_score_1gram.compute_blue_score(sent1, sent2)) # 7*num_sent
+            
+            for gram_type, bleu_scorer in bleu_scores.items():
+                epoch_scores = []
+                for sent1, sent2 in zip(Tx_word, Rx_word):
+                    epoch_scores.append(bleu_scorer.compute_blue_score(sent1, sent2))
+                epoch_scores = np.array(epoch_scores)
+                epoch_mean = np.mean(epoch_scores, axis=1)
+                scores[gram_type].append(epoch_mean)
+            
+            # sim_score = []
+            # for sent1, sent2 in zip(Tx_word, Rx_word):
                 # sim_score.append(similarity.compute_similarity(sent1, sent2)) # 7*num_sent
-            bleu_score = np.array(bleu_score)
-            bleu_score = np.mean(bleu_score, axis=1)
-            score.append(bleu_score)
 
             # sim_score = np.array(sim_score)
             # sim_score = np.mean(sim_score, axis=1)
             # score2.append(sim_score)
 
-    score1 = np.mean(np.array(score), axis=0)
     # score2 = np.mean(np.array(score2), axis=0)
+    final_scores = {gram_type: np.mean(np.array(score_list), axis=0) 
+                   for gram_type, score_list in scores.items()}
 
-    return score1#, score2
+    eval_dir = os.path.join(os.path.dirname(model_path), 'evaluation')
+    os.makedirs(eval_dir, exist_ok=True)
+
+    current_time = datetime.now(pytz.timezone('Asia/Taipei'))
+    result_file = os.path.join(eval_dir, f'{current_time.strftime("%Y%m%d_%H%M%S")}_bleu_scores.txt')
+
+    with open(result_file, 'w', encoding='utf-8') as f:
+        f.write(f'Evaluation Time: {current_time.strftime("%Y-%m-%d %H:%M:%S")}\n')
+        f.write(f'Model Path: {model_path}\n')
+        f.write(f'Channel: {args.channel}\n')
+        f.write(f'Lambda: {args.lamb}\n')
+        f.write('-' * 50 + '\n')
+        f.write(f'SNR values: {SNR}\n')
+        f.write('-' * 50 + '\n')
+        f.write('BLEU Scores:\n')
+        for gram_type, score in final_scores.items():
+            f.write(f'{gram_type}: {score}\n')
+
+    return final_scores
 
 if __name__ == '__main__':
     args = parser.parse_args()
@@ -175,7 +204,7 @@ if __name__ == '__main__':
                         num_vocab, num_vocab, args.d_model, args.num_heads,
                         args.dff, 0.1).to(device)
 
-    # find the latest checkpoint
+    # (default) find the latest checkpoint
     if args.checkpoint_path == "checkpoints/":
         subdirs = [d for d in os.listdir(args.checkpoint_path) if os.path.isdir(os.path.join(args.checkpoint_path, d))]
     
@@ -184,21 +213,20 @@ if __name__ == '__main__':
         
         latest_dir = sorted(subdirs)[-1]
         model_path = os.path.join(args.checkpoint_path, latest_dir, 'best.pth')
-        
+        print("Loading the latest checkpoint from: ", model_path)
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"No best.pth found in {os.path.join(args.checkpoint_path, latest_dir)}")
-            
+    # specific checkpoint  
     else:
         model_path = os.path.join(args.checkpoint_path, 'best.pth')
+        print(f"Loading checkpoint from: {model_path}") 
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"No best.pth found in {args.checkpoint_path}")
 
-    checkpoint = torch.load(model_path)
-    print(f"Loading checkpoint from: {model_path}") 
+    checkpoint = torch.load(model_path, weights_only=True)
     deepsc.load_state_dict(checkpoint)
-    print('model load!')
-
+    
+    print('Start evaluating the model...')
     bleu_score = performance(args, SNR, deepsc)
     print(bleu_score)
-
     #similarity.compute_similarity(sent1, real)
