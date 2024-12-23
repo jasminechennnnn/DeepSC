@@ -28,12 +28,12 @@ parser.add_argument('--checkpoint-path', default='checkpoints/', type=str)
 parser.add_argument('--channel', default='Rayleigh', type=str, help='Please choose AWGN, Rayleigh, and Rician')
 parser.add_argument('--MAX-LENGTH', default=30, type=int)
 parser.add_argument('--MIN-LENGTH', default=4, type=int)
-parser.add_argument('--d-model', default=128, type=int) 
-parser.add_argument('--dff', default=512, type=int)
-parser.add_argument('--num-layers', default=4, type=int)
-parser.add_argument('--num-heads', default=8, type=int)
+parser.add_argument('--d-model', default=128, type=int)   #############
+parser.add_argument('--dff', default=512, type=int)       #############
+parser.add_argument('--num-layers', default=4, type=int)  #############
+parser.add_argument('--num-heads', default=8, type=int)   #############
 parser.add_argument('--batch-size', default=128, type=int)
-parser.add_argument('--epochs', default=80, type=int)
+parser.add_argument('--epochs', default=100, type=int)
 parser.add_argument('--lamb', default=0.0009, type=float, help='weight for MI loss')
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu") 

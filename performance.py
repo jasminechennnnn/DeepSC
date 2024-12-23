@@ -43,61 +43,6 @@ parser.add_argument('--lamb', default=0.0009, type=float, help='weight for MI lo
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-
-# using pre-trained model to compute the sentence similarity
-# class Similarity():
-#     def __init__(self, config_path, checkpoint_path, dict_path):
-#         self.model1 = build_bert_model(config_path, checkpoint_path, with_pool=True)
-#         self.model = keras.Model(inputs=self.model1.input,
-#                                  outputs=self.model1.get_layer('Encoder-11-FeedForward-Norm').output)
-#         # build tokenizer
-#         self.tokenizer = Tokenizer(dict_path, do_lower_case=True)
-#
-#     def compute_similarity(self, real, predicted):
-#         token_ids1, segment_ids1 = [], []
-#         token_ids2, segment_ids2 = [], []
-#         score = []
-#
-#         for (sent1, sent2) in zip(real, predicted):
-#             sent1 = remove_tags(sent1)
-#             sent2 = remove_tags(sent2)
-#
-#             ids1, sids1 = self.tokenizer.encode(sent1)
-#             ids2, sids2 = self.tokenizer.encode(sent2)
-#
-#             token_ids1.append(ids1)
-#             token_ids2.append(ids2)
-#             segment_ids1.append(sids1)
-#             segment_ids2.append(sids2)
-#
-#         token_ids1 = keras.preprocessing.sequence.pad_sequences(token_ids1, maxlen=32, padding='post')
-#         token_ids2 = keras.preprocessing.sequence.pad_sequences(token_ids2, maxlen=32, padding='post')
-#
-#         segment_ids1 = keras.preprocessing.sequence.pad_sequences(segment_ids1, maxlen=32, padding='post')
-#         segment_ids2 = keras.preprocessing.sequence.pad_sequences(segment_ids2, maxlen=32, padding='post')
-#
-#         vector1 = self.model.predict([token_ids1, segment_ids1])
-#         vector2 = self.model.predict([token_ids2, segment_ids2])
-#
-#         vector1 = np.sum(vector1, axis=1)
-#         vector2 = np.sum(vector2, axis=1)
-#
-#         vector1 = normalize(vector1, axis=0, norm='max')
-#         vector2 = normalize(vector2, axis=0, norm='max')
-#
-#         dot = np.diag(np.matmul(vector1, vector2.T))  # a*b
-#         a = np.diag(np.matmul(vector1, vector1.T))  # a*a
-#         b = np.diag(np.matmul(vector2, vector2.T))
-#
-#         a = np.sqrt(a)
-#         b = np.sqrt(b)
-#
-#         output = dot / (a * b)
-#         score = output.tolist()
-#
-#         return score
-
-
 def performance(args, SNR, net):
     # similarity = Similarity(args.bert_config_path, args.bert_checkpoint_path, args.bert_dict_path)
     bleu_scores = {
@@ -115,6 +60,7 @@ def performance(args, SNR, net):
     StoT = SeqtoText(token_to_idx, end_idx)
     scores = {key: [] for key in bleu_scores.keys()}
     # score2 = []
+    example_sentences = {snr: {'input': [], 'output': []} for snr in SNR}
     net.eval()
     with torch.no_grad():
         for _ in range(args.epochs):
@@ -126,7 +72,7 @@ def performance(args, SNR, net):
                 target_word = []
                 noise_std = SNR_to_noise(snr)
 
-                for sents in test_iterator:
+                for idx, sents in enumerate(test_iterator):
 
                     sents = sents.to(device)
                     # src = batch.src.transpose(0, 1)[:1]
@@ -142,6 +88,13 @@ def performance(args, SNR, net):
                     target_sent = target.cpu().numpy().tolist()
                     result_string = list(map(StoT.sequence_to_text, target_sent))
                     target_word = target_word + result_string
+
+                    # save some example sentences
+                    if idx == 0:
+                        num_examples = min(5, len(result_string))
+                        for i in range(num_examples):
+                            example_sentences[snr]['input'].append(target_word[i])
+                            example_sentences[snr]['output'].append(word[i])
 
                 Tx_word.append(word)
                 Rx_word.append(target_word)
@@ -166,9 +119,9 @@ def performance(args, SNR, net):
     final_scores = {gram_type: np.mean(np.array(score_list), axis=0) 
                    for gram_type, score_list in scores.items()}
 
+    # 1. save scores to file
     eval_dir = os.path.join(os.path.dirname(model_path), 'evaluation')
     os.makedirs(eval_dir, exist_ok=True)
-
     current_time = datetime.now(pytz.timezone('Asia/Taipei'))
     result_file = os.path.join(eval_dir, f'{current_time.strftime("%Y%m%d_%H%M%S")}_bleu_scores.txt')
 
@@ -183,6 +136,24 @@ def performance(args, SNR, net):
         f.write('BLEU Scores:\n')
         for gram_type, score in final_scores.items():
             f.write(f'{gram_type}: {score}\n')
+
+    # 2. save some example sentences to file
+    example_file = os.path.join(eval_dir, f'{current_time.strftime("%Y%m%d_%H%M%S")}_example_sentences.txt')
+    with open(example_file, 'w', encoding='utf-8') as f:
+        f.write(f'Example Sentences from Different SNR Settings\n')
+        f.write(f'Evaluation Time: {current_time.strftime("%Y-%m-%d %H:%M:%S")}\n')
+        f.write(f'Model Path: {model_path}\n')
+        f.write('-' * 50 + '\n\n')
+        
+        for snr in SNR:
+            f.write(f'SNR = {snr} dB\n')
+            f.write('-' * 30 + '\n')
+            for idx in range(len(example_sentences[snr]['input'])):
+                f.write(f'Example {idx + 1}:\n')
+                f.write(f'Input:  {example_sentences[snr]["input"][idx]}\n')
+                f.write(f'Output: {example_sentences[snr]["output"][idx]}\n')
+                f.write('\n')
+            f.write('\n')
 
     return final_scores
 
